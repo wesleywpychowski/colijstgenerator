@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CO-lijsten generator vV</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS (for Excel export) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- jsPDF and html2pdf.js (for PDF export) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body class="bg-[#ffe3ed] min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-lg p-6 md:p-8">
+
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <div class="flex justify-center items-center gap-4">
+                <img src="https://methodeschoolvanveldeke.be/wp-content/uploads/2020/11/Artboard-1-e1605635865345-688x1024.png" alt="Logo" style="width: 100px; height: auto;">
+                <h1 class="text-3xl md:text-4xl font-bold text-gray-800">CO-lijsten generator vV</h1>
+            </div>
+            <p class="text-gray-500 mt-2">Genereer een co-lijst voor je klasgroep. Let op! Je kan het achteraf niet meer aanpassen.</p>
+        </div>
+
+        <!-- Main Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+            <!-- Input Section -->
+            <div class="space-y-6">
+                 <div>
+                    <label for="titleInput" class="block text-sm font-medium text-gray-700 mb-2">Titel van je co-lijst:</label>
+                    <input type="text" id="titleInput" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow" value="Vul klasnaam/groepsnaam in">
+                </div>
+                <div>
+                    <label for="names" class="block text-sm font-medium text-gray-700 mb-2">Voer namen in (één per regel):</label>
+                    <textarea id="names" rows="10" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow" placeholder="Jan de Vries&#10;Marieke Jansen&#10;Pieter Klaassen&#10;..."></textarea>
+                </div>
+                <button id="generateBtn" class="w-full bg-[#32aca6] text-white font-bold py-3 px-4 rounded-lg hover:bg-[#2a8e88] transition-colors transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[#32aca6]/50 shadow-md">
+                    Genereer CO-lijst
+                </button>
+            </div>
+
+            <!-- Output Section -->
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-semibold text-gray-800">Gegenereerde CO-lijst</h2>
+                    <div class="flex items-center gap-2">
+                        <button id="downloadPdfBtn" class="hidden bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-red-300 shadow-md">
+                            PDF
+                        </button>
+                        <button id="downloadBtn" class="hidden bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-green-300 shadow-md">
+                            Excel
+                        </button>
+                    </div>
+                </div>
+                <div id="result" class="border border-gray-200 rounded-lg p-4 bg-gray-50 h-96 overflow-y-auto">
+                    <p class="text-gray-500 text-center pt-16">Hier verschijnt je CO-lijst nadat je op 'Genereer CO-lijst' hebt geklikt.</p>
+                </div>
+                 <div id="messageBox" class="hidden p-4 mt-4 text-sm text-red-700 bg-red-100 rounded-lg" role="alert">
+                    <span class="font-medium">Fout:</span> <span id="messageText"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const generateBtn = document.getElementById('generateBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+        const namesInput = document.getElementById('names');
+        const titleInput = document.getElementById('titleInput');
+        const resultDiv = document.getElementById('result');
+        const messageBox = document.getElementById('messageBox');
+        const messageText = document.getElementById('messageText');
+
+        let generatedSchedule = [];
+
+        // --- Hulpfuncties ---
+        function showMessage(text) { messageText.textContent = text; messageBox.classList.remove('hidden'); }
+        function hideMessage() { messageBox.classList.add('hidden'); }
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+        
+        /**
+         * Genereert een set van unieke groepsrondes.
+         */
+        function createRounds(participants) {
+            const originalPlayers = [...participants];
+            const playerCount = originalPlayers.length;
+            if (playerCount < 2) return [];
+            const isOdd = playerCount % 2 !== 0;
+
+            if (!isOdd) {
+                const players = [...originalPlayers];
+                const rounds = [];
+                const numRounds = playerCount - 1;
+                for (let i = 0; i < numRounds; i++) {
+                    const round = [];
+                    for (let j = 0; j < playerCount / 2; j++) {
+                        round.push([players[j], players[playerCount - 1 - j]]);
+                    }
+                    rounds.push(round);
+                    const last = players.pop();
+                    players.splice(1, 0, last);
+                }
+                return rounds;
+            }
+            if (isOdd) {
+                const GHOST = "::GHOST_PLAYER::";
+                let playersWithGhost = [...originalPlayers, GHOST];
+                const evenRoundsOfPairs = [];
+                const numEvenRounds = playersWithGhost.length - 1;
+                 for (let i = 0; i < numEvenRounds; i++) {
+                    const round = [];
+                    for (let j = 0; j < playersWithGhost.length / 2; j++) {
+                        round.push([playersWithGhost[j], playersWithGhost[playersWithGhost.length - 1 - j]]);
+                    }
+                    evenRoundsOfPairs.push(round);
+                    const last = playersWithGhost.pop();
+                    playersWithGhost.splice(1, 0, last);
+                }
+                const finalRounds = evenRoundsOfPairs.map(roundOfPairs => {
+                    let personWithBye = null;
+                    const duos = [];
+                    roundOfPairs.forEach(pair => {
+                        if (pair.includes(GHOST)) {
+                            personWithBye = pair.find(p => p !== GHOST);
+                        } else { duos.push(pair); }
+                    });
+                    if (personWithBye && duos.length > 0) {
+                        const trioIndex = Math.floor(Math.random() * duos.length);
+                        duos[trioIndex].push(personWithBye);
+                    }
+                    return duos;
+                });
+                return finalRounds;
+            }
+        }
+        
+        /**
+         * Rendert de data als een HTML lijst-tabel.
+         */
+        function displaySchedule(schedule) {
+            if (schedule.length === 0) {
+                resultDiv.innerHTML = '<p class="text-gray-500">Er kon geen schema worden gegenereerd.</p>';
+                downloadBtn.classList.add('hidden');
+                downloadPdfBtn.classList.add('hidden');
+                return;
+            }
+
+            let tableHTML = `
+                <table class="w-full text-sm text-left text-gray-500">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                        <tr>
+                            <th scope="col" class="px-4 py-3">Week</th>
+                            <th scope="col" class="px-4 py-3">Groepen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            schedule.forEach(period => {
+                const groupsText = period.groups.map(group => group.sort().join(' & ')).join('<br>');
+                tableHTML += `
+                    <tr class="bg-white border-b">
+                        <td class="px-4 py-4 font-medium text-gray-900 whitespace-nowrap">${period.weekRange}</td>
+                        <td class="px-4 py-4">${groupsText}</td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += '</tbody></table>';
+            resultDiv.innerHTML = tableHTML;
+            downloadBtn.classList.remove('hidden');
+            downloadPdfBtn.classList.remove('hidden');
+        }
+
+        /**
+         * Exporteert de lijst-data naar een Excel-bestand.
+         */
+        function downloadExcel() {
+             if (generatedSchedule.length === 0) {
+                showMessage("Er is geen schema om te downloaden.");
+                return;
+            }
+
+            const worksheetData = generatedSchedule.flatMap(period => {
+                return period.groups.map(group => {
+                    const sortedGroup = group.sort();
+                    return {
+                        'Week Start': parseInt(period.weekRange.split('-')[0]),
+                        'Week Eind': parseInt(period.weekRange.split('-')[1]),
+                        'Persoon 1': sortedGroup[0] || '',
+                        'Persoon 2': sortedGroup[1] || '',
+                        'Persoon 3': sortedGroup[2] || ''
+                    };
+                });
+            });
+
+            const ws = XLSX.utils.json_to_sheet(worksheetData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Groepsschema");
+
+            const cols = [{ wch: 10 }, { wch: 10 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
+            ws['!cols'] = cols;
+
+            XLSX.writeFile(wb, "Groepsschema.xlsx");
+        }
+        
+        /**
+         * Genereert een PDF door een nieuw, printvriendelijk venster te openen.
+         */
+        function downloadPDF() {
+            if (generatedSchedule.length === 0) {
+                showMessage("Er is geen schema om te downloaden.");
+                return;
+            }
+
+            const schemaTitle = titleInput.value || 'Groepsschema';
+            const safeFilename = schemaTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
+            // 1. Bouw de volledige HTML voor de PDF als een string.
+            let htmlContent = `
+                <!DOCTYPE html>
+                <html lang="nl">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>${schemaTitle}</title>
+                    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 0; }
+                        .container { /* This class is no longer used for margins */ }
+                        h1 { text-align: center; margin-bottom: 10mm; font-size: 22px; }
+                        .layout-table { width: 100%; border-collapse: separate; border-spacing: 5mm 0; }
+                        .layout-table td { width: 50%; vertical-align: top; padding: 0; }
+                        .period-block { border: 1px solid #ccc; padding: 10px; height: 100%; box-sizing: border-box; border-radius: 5px; page-break-inside: avoid; }
+                        .period-block h3 { font-size: 14px; font-weight: bold; margin: 0 0 8px 0; padding-bottom: 5px; border-bottom: 1px solid #eee; }
+                        .period-block p { font-size: 12px; line-height: 1.6; margin: 0; }
+                    </style>
+                </head>
+                <body>
+                    <div id="pdf-content">
+                        <h1>${schemaTitle}</h1>
+                        <table class="layout-table"><tbody>`;
+
+            // 2. Vul de tabel met de data.
+            for (let i = 0; i < generatedSchedule.length; i += 2) {
+                htmlContent += `<tr style="page-break-inside: avoid;"><td>`;
+                
+                const period1 = generatedSchedule[i];
+                htmlContent += `<div class="period-block"><h3>Week ${period1.weekRange}</h3><p>${period1.groups.map(g => g.sort().join(' & ')).join('<br>')}</p></div>`;
+                
+                htmlContent += `</td><td>`;
+                
+                const period2 = generatedSchedule[i+1];
+                if (period2) {
+                    htmlContent += `<div class="period-block"><h3>Week ${period2.weekRange}</h3><p>${period2.groups.map(g => g.sort().join(' & ')).join('<br>')}</p></div>`;
+                }
+                
+                htmlContent += `</td></tr>`;
+            }
+            
+            htmlContent += `</tbody></table></div>`;
+            
+            // 3. Voeg het script toe dat de PDF-generatie activeert.
+            htmlContent += `
+                    <script>
+                        window.onload = function() {
+                            const element = document.getElementById('pdf-content');
+                            const opt = {
+                                margin: 20, // Marges worden hier ingesteld, in mm
+                                filename: '${safeFilename}.pdf',
+                                image: { type: 'jpeg', quality: 0.98 },
+                                html2canvas: { scale: 2 },
+                                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                            };
+                            html2pdf().from(element).set(opt).save().then(function() {
+                                setTimeout(() => window.close(), 500);
+                            });
+                        };
+                    <\/script>
+                </body>
+                </html>`;
+            
+            // 4. Open het nieuwe venster.
+            const newWindow = window.open("", "_blank");
+            if (newWindow) {
+                newWindow.document.open();
+                newWindow.document.write(htmlContent);
+                newWindow.document.close();
+            } else {
+                showMessage("Kan geen nieuw venster openen. Controleer uw pop-up blokkering.");
+            }
+        }
+
+        /**
+         * Hoofdfunctie die het schema genereert, verwerkt en weergeeft.
+         */
+        function generateAndDisplay() {
+            hideMessage();
+            let names = namesInput.value.split('\n')
+                .map(name => name.trim())
+                .filter(name => name !== '');
+
+            if (names.length < 2) {
+                showMessage("Voer alstublieft minstens 2 namen in.");
+                return;
+            }
+
+            shuffleArray(names);
+
+            const interval = 2;
+            const totalWeeks = 36;
+            const totalPeriods = Math.ceil(totalWeeks / interval);
+
+            const allUniqueRounds = createRounds(names);
+            
+            if (allUniqueRounds.length === 0) {
+                showMessage("Kon geen rondes genereren. Controleer de invoer.");
+                return;
+            }
+            
+            let scheduledRounds = [];
+            if (allUniqueRounds.length > 0) {
+                scheduledRounds.push(...allUniqueRounds);
+                while (scheduledRounds.length < totalPeriods) {
+                    const shuffledCopy = [...allUniqueRounds];
+                    shuffleArray(shuffledCopy);
+                    scheduledRounds.push(...shuffledCopy);
+                }
+            }
+            scheduledRounds = scheduledRounds.slice(0, totalPeriods);
+
+            let schedule = [];
+            let currentWeek = 1;
+
+            for (let i = 0; i < scheduledRounds.length; i++) {
+                const startWeek = currentWeek;
+                const endWeek = Math.min(currentWeek + interval - 1, totalWeeks);
+                const currentGroups = scheduledRounds[i];
+                schedule.push({
+                    weekRange: `${startWeek}-${endWeek}`,
+                    groups: currentGroups
+                });
+                currentWeek += interval;
+            }
+            
+            generatedSchedule = schedule;
+            displaySchedule(generatedSchedule);
+        }
+
+        // Event Listeners
+        generateBtn.addEventListener('click', generateAndDisplay);
+        downloadBtn.addEventListener('click', downloadExcel);
+        downloadPdfBtn.addEventListener('click', downloadPDF);
+
+    </script>
+</body>
+</html>
