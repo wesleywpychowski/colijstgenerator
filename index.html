@@ -254,13 +254,12 @@
                     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>
                     <style>
                         body { font-family: Arial, sans-serif; margin: 0; }
-                        .container { /* This class is no longer used for margins */ }
                         h1 { text-align: center; margin-bottom: 10mm; font-size: 22px; }
                         .layout-table { width: 100%; border-collapse: separate; border-spacing: 5mm 0; }
                         .layout-table td { width: 50%; vertical-align: top; padding: 0; }
-                        .period-block { border: 1px solid #ccc; padding: 10px; height: 100%; box-sizing: border-box; border-radius: 5px; page-break-inside: avoid; }
-                        .period-block h3 { font-size: 14px; font-weight: bold; margin: 0 0 8px 0; padding-bottom: 5px; border-bottom: 1px solid #eee; }
-                        .period-block p { font-size: 12px; line-height: 1.6; margin: 0; }
+                        .period-block { border: 1px solid #ccc; border-radius: 5px; page-break-inside: avoid; overflow: hidden; }
+                        .period-block h3 { font-size: 14px; font-weight: bold; margin: 0; padding: 10px; background-color: #ffe3ed; }
+                        .period-block p { font-size: 12px; line-height: 1.6; margin: 0; padding: 10px; background-color: #f3f4f6; }
                     </style>
                 </head>
                 <body>
