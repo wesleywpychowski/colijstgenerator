@@ -37,7 +37,7 @@
         <!-- Header -->
         <div class="text-center mb-8">
             <div class="flex justify-center items-center gap-4">
-                <img src="https://methodeschoolvanveldeke.be/wp-content/uploads/2020/11/Artboard-1-e1605635865345-688x1024.png" alt="Logo" style="width: 100px; height: auto;">
+                <img src="logovv.png" alt="Logo" style="width: 100px; height: auto;" onerror="this.style.display='none'">
                 <h1 class="text-3xl md:text-4xl font-bold text-gray-800">CO-lijsten generator vV</h1>
             </div>
             <p class="text-gray-500 mt-2">Genereer een co-lijst voor je klasgroep. Let op! Je kan het achteraf niet meer aanpassen.</p>
@@ -233,6 +233,29 @@
         }
         
         /**
+         * Converteert een lokale afbeelding naar een Base64-string.
+         * @param {string} url - De URL van de afbeelding (bv. 'logovv.png').
+         * @param {function} callback - De functie die wordt aangeroepen met de Base64-string.
+         */
+        function imageToBase64(url, callback) {
+            const xhr = new XMLHttpRequest();
+            xhr.onload = function() {
+                const reader = new FileReader();
+                reader.onloadend = function() {
+                    callback(reader.result);
+                }
+                reader.readAsDataURL(xhr.response);
+            };
+            xhr.onerror = function() {
+                // Als het logo niet kan worden geladen, roep de callback aan zonder data.
+                callback(null);
+            };
+            xhr.open('GET', url);
+            xhr.responseType = 'blob';
+            xhr.send();
+        }
+
+        /**
          * Genereert een PDF door een nieuw, printvriendelijk venster te openen.
          */
         function downloadPDF() {
@@ -241,80 +264,86 @@
                 return;
             }
 
-            const schemaTitle = titleInput.value || 'Groepsschema';
-            const safeFilename = schemaTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            // Converteer het lokale logo naar Base64 voordat de PDF wordt gebouwd.
+            imageToBase64('logovv.png', function(logoBase64) {
+                const schemaTitle = titleInput.value || 'Groepsschema';
+                const safeFilename = schemaTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                
+                // Bouw de header met of zonder logo.
+                let headerHtml = '';
+                if (logoBase64) {
+                    headerHtml = `<div class="header">
+                                    <img src="${logoBase64}" alt="Logo" style="width: 80px; height: auto;">
+                                    <h1>${schemaTitle}</h1>
+                                  </div>`;
+                } else {
+                    headerHtml = `<h1>${schemaTitle}</h1>`;
+                }
 
-            // 1. Bouw de volledige HTML voor de PDF als een string.
-            let htmlContent = `
-                <!DOCTYPE html>
-                <html lang="nl">
-                <head>
-                    <meta charset="UTF-8">
-                    <title>${schemaTitle}</title>
-                    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>
-                    <style>
-                        body { font-family: Arial, sans-serif; margin: 0; }
-                        h1 { text-align: center; margin-bottom: 10mm; font-size: 22px; }
-                        .layout-table { width: 100%; border-collapse: separate; border-spacing: 5mm 5mm; }
-                        .layout-table td { width: 50%; vertical-align: top; padding: 0; }
-                        .period-block { border: 1px solid #ccc; border-radius: 5px; page-break-inside: avoid; overflow: hidden; }
-                        .period-block h3 { font-size: 14px; font-weight: bold; margin: 0; padding: 10px; background-color: #ffe3ed; }
-                        .period-block p { font-size: 12px; line-height: 1.6; margin: 0; padding: 10px; background-color: white; }
-                    </style>
-                </head>
-                <body>
-                    <div id="pdf-content">
-                        <h1>${schemaTitle}</h1>
-                        <table class="layout-table"><tbody>`;
+                let htmlContent = `
+                    <!DOCTYPE html>
+                    <html lang="nl">
+                    <head>
+                        <meta charset="UTF-8">
+                        <title>${schemaTitle}</title>
+                        <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>
+                        <style>
+                            body { font-family: Arial, sans-serif; margin: 0; }
+                            .header { display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 10mm; }
+                            h1 { text-align: center; margin-bottom: 10mm; font-size: 22px; }
+                            .layout-table { width: 100%; border-collapse: separate; border-spacing: 5mm 5mm; }
+                            .layout-table td { width: 50%; vertical-align: top; padding: 0; }
+                            .period-block { border: 1px solid #ccc; border-radius: 5px; page-break-inside: avoid; overflow: hidden; }
+                            .period-block h3 { font-size: 14px; font-weight: bold; margin: 0; padding: 10px; background-color: #ffe3ed; }
+                            .period-block p { font-size: 12px; line-height: 1.6; margin: 0; padding: 10px; background-color: white; }
+                        </style>
+                    </head>
+                    <body>
+                        <div id="pdf-content">
+                            ${headerHtml}
+                            <table class="layout-table"><tbody>`;
 
-            // 2. Vul de tabel met de data.
-            for (let i = 0; i < generatedSchedule.length; i += 2) {
-                htmlContent += `<tr style="page-break-inside: avoid;"><td>`;
-                
-                const period1 = generatedSchedule[i];
-                htmlContent += `<div class="period-block"><h3>Week ${period1.weekRange}</h3><p>${period1.groups.map(g => g.sort().join(' & ')).join('<br>')}</p></div>`;
-                
-                htmlContent += `</td><td>`;
-                
-                const period2 = generatedSchedule[i+1];
-                if (period2) {
-                    htmlContent += `<div class="period-block"><h3>Week ${period2.weekRange}</h3><p>${period2.groups.map(g => g.sort().join(' & ')).join('<br>')}</p></div>`;
+                for (let i = 0; i < generatedSchedule.length; i += 2) {
+                    htmlContent += `<tr style="page-break-inside: avoid;"><td>`;
+                    const period1 = generatedSchedule[i];
+                    htmlContent += `<div class="period-block"><h3>Week ${period1.weekRange}</h3><p>${period1.groups.map(g => g.sort().join(' & ')).join('<br>')}</p></div>`;
+                    htmlContent += `</td><td>`;
+                    const period2 = generatedSchedule[i+1];
+                    if (period2) {
+                        htmlContent += `<div class="period-block"><h3>Week ${period2.weekRange}</h3><p>${period2.groups.map(g => g.sort().join(' & ')).join('<br>')}</p></div>`;
+                    }
+                    htmlContent += `</td></tr>`;
                 }
                 
-                htmlContent += `</td></tr>`;
-            }
-            
-            htmlContent += `</tbody></table></div>`;
-            
-            // 3. Voeg het script toe dat de PDF-generatie activeert.
-            htmlContent += `
-                    <script>
-                        window.onload = function() {
-                            const element = document.getElementById('pdf-content');
-                            const opt = {
-                                margin: 20, // Marges worden hier ingesteld, in mm
-                                filename: '${safeFilename}.pdf',
-                                image: { type: 'jpeg', quality: 0.98 },
-                                html2canvas: { scale: 2 },
-                                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                htmlContent += `</tbody></table></div>`;
+                htmlContent += `
+                        <script>
+                            window.onload = function() {
+                                const element = document.getElementById('pdf-content');
+                                const opt = {
+                                    margin: 20,
+                                    filename: '${safeFilename}.pdf',
+                                    image: { type: 'jpeg', quality: 0.98 },
+                                    html2canvas: { scale: 2, useCORS: true },
+                                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                                };
+                                html2pdf().from(element).set(opt).save().then(function() {
+                                    setTimeout(() => window.close(), 500);
+                                });
                             };
-                            html2pdf().from(element).set(opt).save().then(function() {
-                                setTimeout(() => window.close(), 500);
-                            });
-                        };
-                    <\/script>
-                </body>
-                </html>`;
-            
-            // 4. Open het nieuwe venster.
-            const newWindow = window.open("", "_blank");
-            if (newWindow) {
-                newWindow.document.open();
-                newWindow.document.write(htmlContent);
-                newWindow.document.close();
-            } else {
-                showMessage("Kan geen nieuw venster openen. Controleer uw pop-up blokkering.");
-            }
+                        <\/script>
+                    </body>
+                    </html>`;
+                
+                const newWindow = window.open("", "_blank");
+                if (newWindow) {
+                    newWindow.document.open();
+                    newWindow.document.write(htmlContent);
+                    newWindow.document.close();
+                } else {
+                    showMessage("Kan geen nieuw venster openen. Controleer uw pop-up blokkering.");
+                }
+            });
         }
 
         /**
@@ -327,7 +356,7 @@
                 .map(name => name.trim())
                 .filter(name => name !== '');
 
-            if (schemaTitle === '') {
+            if (schemaTitle === '' || schemaTitle === 'Vul klasnaam/groepsnaam in') {
                 showMessage("Voer alstublieft een titel in voor de co-lijst.");
                 return;
             }
