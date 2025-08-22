@@ -233,29 +233,6 @@
         }
         
         /**
-         * Converteert een lokale afbeelding naar een Base64-string.
-         * @param {string} url - De URL van de afbeelding (bv. 'logovv.png').
-         * @param {function} callback - De functie die wordt aangeroepen met de Base64-string.
-         */
-        function imageToBase64(url, callback) {
-            const xhr = new XMLHttpRequest();
-            xhr.onload = function() {
-                const reader = new FileReader();
-                reader.onloadend = function() {
-                    callback(reader.result);
-                }
-                reader.readAsDataURL(xhr.response);
-            };
-            xhr.onerror = function() {
-                // Als het logo niet kan worden geladen, roep de callback aan zonder data.
-                callback(null);
-            };
-            xhr.open('GET', url);
-            xhr.responseType = 'blob';
-            xhr.send();
-        }
-
-        /**
          * Genereert een PDF door een nieuw, printvriendelijk venster te openen.
          */
         function downloadPDF() {
@@ -264,86 +241,75 @@
                 return;
             }
 
-            // Converteer het lokale logo naar Base64 voordat de PDF wordt gebouwd.
-            imageToBase64('logovv.png', function(logoBase64) {
-                const schemaTitle = titleInput.value || 'Groepsschema';
-                const safeFilename = schemaTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            const schemaTitle = titleInput.value || 'Groepsschema';
+            const safeFilename = schemaTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            
+            let htmlContent = `
+                <!DOCTYPE html>
+                <html lang="nl">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>${schemaTitle}</title>
+                    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 0; }
+                        h1 { text-align: center; margin-bottom: 10mm; font-size: 22px; }
+                        .layout-table { width: 100%; border-collapse: separate; border-spacing: 5mm 5mm; }
+                        .layout-table td { width: 50%; vertical-align: top; padding: 0; }
+                        .period-block { border: 1px solid #ccc; border-radius: 5px; page-break-inside: avoid; overflow: hidden; }
+                        .period-block h3 { font-size: 14px; font-weight: bold; margin: 0; padding: 10px; background-color: #ffe3ed; }
+                        .period-block p { font-size: 12px; line-height: 1.6; margin: 0; padding: 10px; background-color: white; }
+                    </style>
+                </head>
+                <body>
+                    <div id="pdf-content">
+                        <h1>${schemaTitle}</h1>
+                        <table class="layout-table"><tbody>`;
+
+            for (let i = 0; i < generatedSchedule.length; i += 2) {
+                htmlContent += `<tr style="page-break-inside: avoid;"><td>`;
                 
-                // Bouw de header met of zonder logo.
-                let headerHtml = '';
-                if (logoBase64) {
-                    headerHtml = `<div class="header">
-                                    <img src="${logoBase64}" alt="Logo" style="width: 80px; height: auto;">
-                                    <h1>${schemaTitle}</h1>
-                                  </div>`;
-                } else {
-                    headerHtml = `<h1>${schemaTitle}</h1>`;
-                }
-
-                let htmlContent = `
-                    <!DOCTYPE html>
-                    <html lang="nl">
-                    <head>
-                        <meta charset="UTF-8">
-                        <title>${schemaTitle}</title>
-                        <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>
-                        <style>
-                            body { font-family: Arial, sans-serif; margin: 0; }
-                            .header { display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 10mm; }
-                            h1 { text-align: center; margin-bottom: 10mm; font-size: 22px; }
-                            .layout-table { width: 100%; border-collapse: separate; border-spacing: 5mm 5mm; }
-                            .layout-table td { width: 50%; vertical-align: top; padding: 0; }
-                            .period-block { border: 1px solid #ccc; border-radius: 5px; page-break-inside: avoid; overflow: hidden; }
-                            .period-block h3 { font-size: 14px; font-weight: bold; margin: 0; padding: 10px; background-color: #ffe3ed; }
-                            .period-block p { font-size: 12px; line-height: 1.6; margin: 0; padding: 10px; background-color: white; }
-                        </style>
-                    </head>
-                    <body>
-                        <div id="pdf-content">
-                            ${headerHtml}
-                            <table class="layout-table"><tbody>`;
-
-                for (let i = 0; i < generatedSchedule.length; i += 2) {
-                    htmlContent += `<tr style="page-break-inside: avoid;"><td>`;
-                    const period1 = generatedSchedule[i];
-                    htmlContent += `<div class="period-block"><h3>Week ${period1.weekRange}</h3><p>${period1.groups.map(g => g.sort().join(' & ')).join('<br>')}</p></div>`;
-                    htmlContent += `</td><td>`;
-                    const period2 = generatedSchedule[i+1];
-                    if (period2) {
-                        htmlContent += `<div class="period-block"><h3>Week ${period2.weekRange}</h3><p>${period2.groups.map(g => g.sort().join(' & ')).join('<br>')}</p></div>`;
-                    }
-                    htmlContent += `</td></tr>`;
+                const period1 = generatedSchedule[i];
+                htmlContent += `<div class="period-block"><h3>Week ${period1.weekRange}</h3><p>${period1.groups.map(g => g.sort().join(' & ')).join('<br>')}</p></div>`;
+                
+                htmlContent += `</td><td>`;
+                
+                const period2 = generatedSchedule[i+1];
+                if (period2) {
+                    htmlContent += `<div class="period-block"><h3>Week ${period2.weekRange}</h3><p>${period2.groups.map(g => g.sort().join(' & ')).join('<br>')}</p></div>`;
                 }
                 
-                htmlContent += `</tbody></table></div>`;
-                htmlContent += `
-                        <script>
-                            window.onload = function() {
-                                const element = document.getElementById('pdf-content');
-                                const opt = {
-                                    margin: 20,
-                                    filename: '${safeFilename}.pdf',
-                                    image: { type: 'jpeg', quality: 0.98 },
-                                    html2canvas: { scale: 2, useCORS: true },
-                                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-                                };
-                                html2pdf().from(element).set(opt).save().then(function() {
-                                    setTimeout(() => window.close(), 500);
-                                });
+                htmlContent += `</td></tr>`;
+            }
+            
+            htmlContent += `</tbody></table></div>`;
+            htmlContent += `
+                    <script>
+                        window.onload = function() {
+                            const element = document.getElementById('pdf-content');
+                            const opt = {
+                                margin: 20,
+                                filename: '${safeFilename}.pdf',
+                                image: { type: 'jpeg', quality: 0.98 },
+                                html2canvas: { scale: 2 },
+                                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
                             };
-                        <\/script>
-                    </body>
-                    </html>`;
-                
-                const newWindow = window.open("", "_blank");
-                if (newWindow) {
-                    newWindow.document.open();
-                    newWindow.document.write(htmlContent);
-                    newWindow.document.close();
-                } else {
-                    showMessage("Kan geen nieuw venster openen. Controleer uw pop-up blokkering.");
-                }
-            });
+                            html2pdf().from(element).set(opt).save().then(function() {
+                                setTimeout(() => window.close(), 500);
+                            });
+                        };
+                    <\/script>
+                </body>
+                </html>`;
+            
+            const newWindow = window.open("", "_blank");
+            if (newWindow) {
+                newWindow.document.open();
+                newWindow.document.write(htmlContent);
+                newWindow.document.close();
+            } else {
+                showMessage("Kan geen nieuw venster openen. Controleer uw pop-up blokkering.");
+            }
         }
 
         /**
