@@ -50,7 +50,7 @@
             <div class="space-y-6">
                  <div>
                     <label for="titleInput" class="block text-sm font-medium text-gray-700 mb-2">Titel van je co-lijst:</label>
-                    <input type="text" id="titleInput" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow" value="Vul klasnaam/groepsnaam in">
+                    <input type="text" id="titleInput" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow" placeholder="Vul klasnaam/groepsnaam in">
                 </div>
                 <div>
                     <label for="names" class="block text-sm font-medium text-gray-700 mb-2">Voer namen in (één per regel):</label>
@@ -322,9 +322,15 @@
          */
         function generateAndDisplay() {
             hideMessage();
+            const schemaTitle = titleInput.value.trim();
             let names = namesInput.value.split('\n')
                 .map(name => name.trim())
                 .filter(name => name !== '');
+
+            if (schemaTitle === '') {
+                showMessage("Voer alstublieft een titel in voor de co-lijst.");
+                return;
+            }
 
             if (names.length < 2) {
                 showMessage("Voer alstublieft minstens 2 namen in.");
